@@ -4,117 +4,536 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Smart Invoice Reader</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap">
 <style>
-  :root { --bg:#f5f7f9; --card:#fff; --ink:#1b2430; --muted:#5d6977; --line:#dde3ea;
-          --accent:#0b6e7f; --ok:#1d7a3e; --ok-bg:#e3f4e8; --warn:#9a5b00; --warn-bg:#fbf0df; }
-  * { box-sizing: border-box; }
-  body { margin:0; font-family: system-ui, "Segoe UI", sans-serif; background:var(--bg); color:var(--ink); }
-  main { max-width: 960px; margin: 0 auto; padding: 32px 16px; }
-  h1 { margin: 0 0 4px; font-size: 28px; }
-  p.sub { margin: 0 0 24px; color: var(--muted); }
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 18px; margin-bottom: 20px; }
-  form { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
-  button { background: var(--accent); color: #fff; border: 0; border-radius: 8px; padding: 9px 16px; font-size: 15px; cursor: pointer; }
-  button:disabled { opacity: .6; cursor: wait; }
-  #msg { color: var(--muted); }
-  .result dl { display: grid; grid-template-columns: 160px 1fr; gap: 6px 12px; margin: 10px 0; }
-  .result dt { color: var(--muted); }
-  .pill { display: inline-block; padding: 2px 10px; border-radius: 99px; font-size: 13px; font-weight: 600; }
-  .valid { background: var(--ok-bg); color: var(--ok); }
-  .needs_review { background: var(--warn-bg); color: var(--warn); }
-  .table-wrap { overflow-x: auto; }
-  table { width: 100%; border-collapse: collapse; font-size: 14px; }
-  th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
-  th { color: var(--muted); font-weight: 600; }
-  ul.issues { margin: 6px 0 0; color: var(--warn); }
+/* ---------- Design tokens: colours, fonts and sizes used everywhere ---------- */
+:root {
+  --bg: #f4f6f8;          --surface: #ffffff;     --surface-2: #f8fafb;
+  --ink: #14202b;         --muted: #5b6876;       --line: #e1e6eb;
+  --accent: #0f6b74;      --accent-ink: #ffffff;  --accent-soft: #e2f1f2;
+  --ok: #17703a;          --ok-soft: #e1f3e7;
+  --warn: #9a5800;        --warn-soft: #fcefd9;
+  --danger: #b42318;      --danger-soft: #fdecea;
+  --shadow: 0 1px 2px rgba(20, 32, 43, .05), 0 8px 24px rgba(20, 32, 43, .06);
+  --radius: 14px;
+  --font: "Manrope", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+  color-scheme: light;
+}
+/* Dark theme: used when the computer is in dark mode, or when the toggle is set to dark */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d1318; --surface: #151d24; --surface-2: #1a242c; --ink: #e4eaef; --muted: #93a1ae;
+    --line: #26323c; --accent: #4fb8c2; --accent-ink: #072226; --accent-soft: #163338;
+    --ok: #63cf8c; --ok-soft: #15301f; --warn: #f0b45a; --warn-soft: #33270f;
+    --danger: #f28b82; --danger-soft: #3a1a17; --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.25);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0d1318; --surface: #151d24; --surface-2: #1a242c; --ink: #e4eaef; --muted: #93a1ae;
+  --line: #26323c; --accent: #4fb8c2; --accent-ink: #072226; --accent-soft: #163338;
+  --ok: #63cf8c; --ok-soft: #15301f; --warn: #f0b45a; --warn-soft: #33270f;
+  --danger: #f28b82; --danger-soft: #3a1a17; --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.25);
+  color-scheme: dark;
+}
+
+/* ---------- Base ---------- */
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font); font-size: 15px; line-height: 1.5; }
+button, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+/* ---------- Top bar ---------- */
+.topbar { background: var(--surface); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 10; }
+.topbar-inner { max-width: 1180px; margin: 0 auto; padding: 12px 20px; display: flex; align-items: center; gap: 14px; }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 17px; letter-spacing: -.01em; }
+.logo { width: 32px; height: 32px; border-radius: 9px; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; }
+.spacer { flex: 1; }
+.ai-status { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--muted); background: var(--surface-2); border: 1px solid var(--line); padding: 5px 11px; border-radius: 99px; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.dot.on { background: var(--ok); box-shadow: 0 0 0 3px var(--ok-soft); }
+.dot.off { background: var(--warn); box-shadow: 0 0 0 3px var(--warn-soft); }
+.icon-btn { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); }
+.icon-btn:hover { background: var(--surface-2); }
+
+/* ---------- Layout ---------- */
+main { max-width: 1180px; margin: 0 auto; padding: 28px 20px 60px; }
+.page-head h1 { margin: 0; font-size: clamp(24px, 3.4vw, 32px); letter-spacing: -.02em; }
+.page-head p { margin: 6px 0 22px; color: var(--muted); max-width: 70ch; }
+.grid-top { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 18px; margin-bottom: 18px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
+.card-pad { padding: 20px; }
+.card h2 { margin: 0 0 4px; font-size: 16px; }
+.card .hint { margin: 0 0 16px; color: var(--muted); font-size: 13.5px; }
+
+/* ---------- Upload area ---------- */
+.drop { display: block; border: 2px dashed var(--line); border-radius: 12px; background: var(--surface-2); padding: 26px 18px; text-align: center; transition: border-color .15s, background .15s; cursor: pointer; }
+.drop:hover, .drop.drag { border-color: var(--accent); background: var(--accent-soft); }
+.drop svg { color: var(--accent); }
+.drop strong { display: block; margin-top: 8px; font-size: 15px; }
+.drop span { color: var(--muted); font-size: 13px; }
+.drop .link { color: var(--accent); font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
+.file-row { display: none; align-items: center; gap: 12px; margin-top: 14px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; }
+.file-row.show { display: flex; }
+.file-badge { flex: none; font-family: var(--mono); font-size: 11px; font-weight: 600; background: var(--accent-soft); color: var(--accent); padding: 4px 7px; border-radius: 6px; text-transform: uppercase; }
+.file-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.file-size { color: var(--muted); font-size: 13px; }
+.btn { border: 0; border-radius: 10px; padding: 10px 18px; font-weight: 700; background: var(--accent); color: var(--accent-ink); display: inline-flex; align-items: center; gap: 8px; }
+.btn:hover { filter: brightness(1.07); }
+.btn:disabled { opacity: .55; cursor: not-allowed; filter: none; }
+.btn-ghost { background: transparent; color: var(--muted); border: 1px solid var(--line); }
+.btn-danger { background: var(--danger-soft); color: var(--danger); }
+
+/* Processing steps shown while the server works on the invoice */
+.steps { display: none; margin-top: 16px; padding: 0; list-style: none; gap: 8px; }
+.steps.show { display: grid; grid-template-columns: repeat(4, 1fr); }
+.steps li { font-size: 12.5px; color: var(--muted); padding-top: 8px; border-top: 3px solid var(--line); transition: color .2s, border-color .2s; }
+.steps li.active { color: var(--accent); border-color: var(--accent); font-weight: 700; }
+.steps li.done { color: var(--ok); border-color: var(--ok); }
+
+/* ---------- Stats ---------- */
+.stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.stat { padding: 16px; }
+.stat .label { font-size: 13px; color: var(--muted); font-weight: 600; }
+.stat .value { font-size: 30px; font-weight: 800; letter-spacing: -.02em; margin-top: 2px; }
+.stat .bar { height: 6px; border-radius: 99px; background: var(--surface-2); border: 1px solid var(--line); margin-top: 10px; overflow: hidden; }
+.stat .bar i { display: block; height: 100%; width: 0; transition: width .5s; }
+.stat.ok .value { color: var(--ok); }    .stat.ok .bar i { background: var(--ok); }
+.stat.warn .value { color: var(--warn); } .stat.warn .bar i { background: var(--warn); }
+.stat.ai .bar i { background: var(--accent); }
+
+/* ---------- Invoice table ---------- */
+.table-head { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--line); }
+.table-head h2 { margin: 0; font-size: 16px; }
+.tabs { display: flex; gap: 4px; background: var(--surface-2); border: 1px solid var(--line); padding: 3px; border-radius: 10px; }
+.tabs button { border: 0; background: transparent; padding: 5px 12px; border-radius: 7px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.tabs button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+.search { display: flex; align-items: center; gap: 8px; border: 1px solid var(--line); border-radius: 10px; padding: 6px 10px; background: var(--surface); min-width: 220px; }
+.search input { border: 0; outline: 0; background: transparent; width: 100%; font-size: 14px; }
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th { text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 700; padding: 10px 20px; background: var(--surface-2); border-bottom: 1px solid var(--line); white-space: nowrap; }
+td { padding: 13px 20px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+tbody tr { cursor: pointer; transition: background .12s; }
+tbody tr:hover { background: var(--surface-2); }
+tbody tr.selected { background: var(--accent-soft); }
+td.right, th.right { text-align: right; }
+.vendor { font-weight: 700; }
+.sub { color: var(--muted); font-size: 12.5px; }
+.pill { white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 99px; font-size: 12.5px; font-weight: 700; }
+.pill::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.pill.valid { background: var(--ok-soft); color: var(--ok); }
+.pill.needs_review { background: var(--warn-soft); color: var(--warn); }
+.tag { font-family: var(--mono); font-size: 11.5px; padding: 2px 7px; border-radius: 6px; border: 1px solid var(--line); color: var(--muted); }
+.tag.llm { color: var(--accent); border-color: var(--accent); }
+.empty { padding: 48px 20px; text-align: center; color: var(--muted); }
+.empty strong { display: block; color: var(--ink); font-size: 16px; margin-bottom: 4px; }
+
+/* ---------- Detail drawer (opens when you click a row) ---------- */
+.backdrop { position: fixed; inset: 0; background: rgba(10, 16, 22, .45); opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 20; }
+.backdrop.open { opacity: 1; pointer-events: auto; }
+.drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(520px, 100%); background: var(--surface); border-left: 1px solid var(--line);
+          transform: translateX(100%); transition: transform .25s ease; z-index: 21; display: flex; flex-direction: column; }
+.drawer.open { transform: none; }
+.drawer-head { padding: 18px 20px; border-bottom: 1px solid var(--line); display: flex; align-items: flex-start; gap: 12px; }
+.drawer-head h3 { margin: 0; font-size: 19px; }
+.drawer-body { padding: 20px; overflow-y: auto; flex: 1; }
+.drawer-foot { padding: 14px 20px; border-top: 1px solid var(--line); display: flex; gap: 10px; justify-content: space-between; }
+.fields { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 0 0 18px; }
+.field { background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+.field dt { font-size: 12px; color: var(--muted); font-weight: 600; }
+.field dd { margin: 2px 0 0; font-weight: 700; word-break: break-word; }
+.field.total { grid-column: span 2; }
+.field.total dd { font-size: 24px; }
+.section-title { font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 700; margin: 18px 0 8px; }
+.issues { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.issues li { display: flex; gap: 10px; align-items: flex-start; background: var(--warn-soft); color: var(--warn); padding: 10px 12px; border-radius: 10px; font-weight: 600; font-size: 14px; }
+.all-good { display: flex; gap: 10px; align-items: center; background: var(--ok-soft); color: var(--ok); padding: 10px 12px; border-radius: 10px; font-weight: 600; font-size: 14px; }
+.items { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.items table td, .items table th { padding: 9px 12px; }
+.items tbody tr { cursor: default; }
+.items tbody tr:hover { background: none; }
+
+/* ---------- Toast message (bottom of screen) ---------- */
+.toast { position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 20px); opacity: 0; background: var(--ink); color: var(--bg);
+         padding: 11px 18px; border-radius: 10px; font-weight: 600; font-size: 14px; transition: all .25s; z-index: 30; max-width: calc(100% - 32px); }
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+.toast.error { background: var(--danger); color: #fff; }
+
+footer { text-align: center; color: var(--muted); font-size: 13px; padding: 10px 20px 30px; }
+
+/* ---------- Phones and small screens ---------- */
+@media (max-width: 860px) {
+  .grid-top { grid-template-columns: 1fr; }
+}
+@media (max-width: 560px) {
+  .topbar-inner { padding: 10px 16px; }
+  .ai-status .txt { display: none; }
+  main { padding: 20px 16px 50px; }
+  .steps.show { grid-template-columns: 1fr 1fr; }
+  .search { min-width: 0; flex: 1 1 100%; }
+  .fields { grid-template-columns: 1fr; }
+  .hide-sm { display: none; }
+  .file-row { flex-wrap: wrap; }
+  .file-row .btn { width: 100%; justify-content: center; }
+  td { white-space: normal; }
+  td.right { white-space: nowrap; }
+  .vendor + .sub { word-break: break-all; }
+  .field.total { grid-column: auto; }
+  th, td { padding-left: 14px; padding-right: 14px; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 </head>
 <body>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <span class="logo" aria-hidden="true">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h9l5 5v15H6z"/><path d="M14 2v6h6"/><path d="M9 13h6M9 17h4"/></svg>
+      </span>
+      Smart Invoice Reader
+    </div>
+    <div class="spacer"></div>
+    <div class="ai-status" title="Whether the Gemini API key is configured on the server">
+      <span class="dot" id="ai-dot"></span><span class="txt" id="ai-text">Checking AI…</span>
+    </div>
+    <button class="icon-btn" id="theme-btn" aria-label="Switch light or dark theme">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+    </button>
+  </div>
+</header>
+
 <main>
-  <h1>Smart Invoice Reader</h1>
-  <p class="sub">Upload an invoice (PDF, PNG or JPG). The app reads it with OCR, extracts the key fields with an LLM, and checks them with validation rules.</p>
+  <div class="page-head">
+    <h1>Invoice processing</h1>
+    <p>Upload a PDF or image invoice. The app reads the text with OCR, extracts the key fields with an LLM, and checks them against business rules before saving.</p>
+  </div>
 
-  <section class="card">
-    <form id="upload-form">
-      <input type="file" id="file" name="file" accept=".pdf,.png,.jpg,.jpeg" required>
-      <button type="submit" id="btn">Upload and extract</button>
-      <span id="msg"></span>
-    </form>
-    <div id="result" class="result"></div>
-  </section>
+  <div class="grid-top">
+    <!-- Upload card -->
+    <section class="card card-pad" aria-labelledby="up-title">
+      <h2 id="up-title">Upload an invoice</h2>
+      <p class="hint">PDF, PNG or JPG · up to 10 MB</p>
 
-  <section class="card">
-    <h2 style="margin-top:0">Processed invoices</h2>
+      <label class="drop" id="drop" for="file">
+        <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>
+        <strong>Drag and drop your invoice here</strong>
+        <span>or <span class="link">browse files</span></span>
+      </label>
+      <input type="file" id="file" class="sr-only" accept=".pdf,.png,.jpg,.jpeg">
+
+      <div class="file-row" id="file-row">
+        <span class="file-badge" id="file-ext">PDF</span>
+        <span class="file-name" id="file-name"></span>
+        <span class="file-size" id="file-size"></span>
+        <button class="btn" id="extract-btn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+          Extract
+        </button>
+      </div>
+
+      <ol class="steps" id="steps" aria-live="polite">
+        <li>Uploading</li><li>Reading text</li><li>AI extraction</li><li>Validating</li>
+      </ol>
+    </section>
+
+    <!-- Summary numbers -->
+    <section class="stats" aria-label="Summary">
+      <div class="card stat"><div class="label">Invoices processed</div><div class="value num" id="s-total">0</div><div class="sub">all time</div></div>
+      <div class="card stat ai"><div class="label">Read by AI</div><div class="value num" id="s-ai">0%</div><div class="bar"><i id="b-ai"></i></div></div>
+      <div class="card stat ok"><div class="label">Valid</div><div class="value num" id="s-valid">0</div><div class="bar"><i id="b-valid"></i></div></div>
+      <div class="card stat warn"><div class="label">Needs review</div><div class="value num" id="s-review">0</div><div class="bar"><i id="b-review"></i></div></div>
+    </section>
+  </div>
+
+  <!-- All invoices -->
+  <section class="card" aria-labelledby="tbl-title">
+    <div class="table-head">
+      <h2 id="tbl-title">Processed invoices</h2>
+      <div class="tabs" role="group" aria-label="Filter by status">
+        <button data-filter="all" aria-pressed="true">All</button>
+        <button data-filter="valid" aria-pressed="false">Valid</button>
+        <button data-filter="needs_review" aria-pressed="false">Needs review</button>
+      </div>
+      <div class="spacer"></div>
+      <label class="search">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <span class="sr-only">Search</span>
+        <input id="search" type="search" placeholder="Search vendor or invoice no.">
+      </label>
+    </div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>#</th><th>File</th><th>Invoice no.</th><th>Date</th><th>Vendor</th><th>Total</th><th>Status</th><th>Method</th></tr></thead>
-        <tbody id="rows"><tr><td colspan="8">No invoices yet.</td></tr></tbody>
+        <thead><tr><th>Vendor</th><th class="hide-sm">Invoice no.</th><th class="hide-sm">Date</th><th class="right">Total</th><th>Status</th><th class="hide-sm">Read by</th></tr></thead>
+        <tbody id="rows"></tbody>
       </table>
     </div>
+    <div class="empty" id="empty" hidden><strong>No invoices yet</strong>Upload one above to see the extracted data here.</div>
   </section>
 </main>
 
-<script>
-const form = document.getElementById("upload-form");
-const msg = document.getElementById("msg");
-const btn = document.getElementById("btn");
-const result = document.getElementById("result");
+<footer>Smart Invoice Reader · Python, FastAPI, Tesseract OCR, Google Gemini · <a href="/docs" style="color:inherit">API docs</a></footer>
 
-// escape text before putting it into HTML, so file contents can't inject markup
+<!-- Detail drawer -->
+<div class="backdrop" id="backdrop"></div>
+<aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="d-title" aria-hidden="true">
+  <div class="drawer-head">
+    <div style="flex:1; min-width:0">
+      <div class="sub" id="d-file"></div>
+      <h3 id="d-title"></h3>
+      <div style="margin-top:8px; display:flex; gap:8px; align-items:center" id="d-badges"></div>
+    </div>
+    <button class="icon-btn" id="close-btn" aria-label="Close">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+    </button>
+  </div>
+  <div class="drawer-body" id="d-body"></div>
+  <div class="drawer-foot">
+    <button class="btn btn-danger" id="delete-btn">Delete</button>
+    <button class="btn btn-ghost" id="close-btn-2">Close</button>
+  </div>
+</aside>
+
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+// ---------- Small helpers ----------
+const $ = (id) => document.getElementById(id);
+let invoices = [];          // every invoice from the API
+let filter = "all";         // which status tab is selected
+let openId = null;          // which invoice is open in the drawer
+let selectedFile = null;    // the file chosen for upload
+
+// Escape text before putting it into HTML, so nothing inside an invoice can inject markup
 function esc(value) {
   return String(value ?? "—").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 }
-function money(inv) {
-  const t = inv.data.total_amount;
-  return t == null ? "—" : `${inv.data.currency || ""} ${t.toFixed(2)}`.trim();
+function money(amount, currency) {
+  if (amount == null) return "—";
+  const text = amount.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return currency ? `${currency} ${text}` : text;
+}
+function niceDate(value) {
+  if (!value) return "—";
+  const d = new Date(value + "T00:00:00");
+  return isNaN(d) ? value : d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+}
+const statusLabel = (s) => s === "valid" ? "Valid" : "Needs review";
+
+function toast(text, isError = false) {
+  const t = $("toast");
+  t.textContent = text;
+  t.className = "toast show" + (isError ? " error" : "");
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => t.className = "toast", 3200);
 }
 
-function showResult(inv) {
-  const issues = inv.issues.length
-    ? `<ul class="issues">${inv.issues.map(i => `<li>${esc(i)}</li>`).join("")}</ul>` : "";
-  result.innerHTML = `
-    <dl>
-      <dt>Status</dt><dd><span class="pill ${inv.status}">${inv.status.replace("_", " ")}</span></dd>
-      <dt>Invoice number</dt><dd>${esc(inv.data.invoice_number)}</dd>
-      <dt>Date</dt><dd>${esc(inv.data.invoice_date)}</dd>
-      <dt>Vendor</dt><dd>${esc(inv.data.vendor_name)}</dd>
-      <dt>Total</dt><dd>${esc(money(inv))}</dd>
-      <dt>Line items</dt><dd>${inv.data.line_items.length}</dd>
-      <dt>Extracted by</dt><dd>${inv.method === "llm" ? "LLM (Gemini)" : "Regex rules"}</dd>
-    </dl>${issues}`;
-}
+// ---------- Theme toggle (light / dark) ----------
+const savedTheme = (() => { try { return localStorage.getItem("theme"); } catch { return null; } })();
+if (savedTheme) document.documentElement.dataset.theme = savedTheme;
+$("theme-btn").addEventListener("click", () => {
+  const dark = document.documentElement.dataset.theme
+    ? document.documentElement.dataset.theme === "dark"
+    : matchMedia("(prefers-color-scheme: dark)").matches;
+  const next = dark ? "light" : "dark";
+  document.documentElement.dataset.theme = next;
+  try { localStorage.setItem("theme", next); } catch {}
+});
 
-async function loadTable() {
-  const res = await fetch("/api/invoices");
-  const list = await res.json();
-  const rows = document.getElementById("rows");
-  if (!list.length) { rows.innerHTML = '<tr><td colspan="8">No invoices yet.</td></tr>'; return; }
-  rows.innerHTML = list.map(inv => `
-    <tr><td>${inv.id}</td><td>${esc(inv.filename)}</td><td>${esc(inv.data.invoice_number)}</td>
-    <td>${esc(inv.data.invoice_date)}</td><td>${esc(inv.data.vendor_name)}</td><td>${esc(money(inv))}</td>
-    <td><span class="pill ${inv.status}">${inv.status.replace("_", " ")}</span></td><td>${inv.method}</td></tr>`).join("");
-}
+// ---------- Is the AI (Gemini) configured? Uses GET /health ----------
+fetch("/health").then(r => r.json()).then(h => {
+  $("ai-dot").className = "dot " + (h.llm_enabled ? "on" : "off");
+  $("ai-text").textContent = h.llm_enabled ? "Gemini AI connected" : "Rules mode (no API key)";
+}).catch(() => { $("ai-text").textContent = "Server offline"; });
 
-form.addEventListener("submit", async (event) => {
-  event.preventDefault();
+// ---------- Choosing a file (click or drag and drop) ----------
+const drop = $("drop");
+function chooseFile(file) {
+  if (!file) return;
+  const ext = file.name.split(".").pop().toLowerCase();
+  if (!["pdf", "png", "jpg", "jpeg"].includes(ext)) { toast("Please choose a PDF, PNG or JPG file.", true); return; }
+  if (file.size > 10 * 1024 * 1024) { toast("That file is larger than 10 MB.", true); return; }
+  selectedFile = file;
+  $("file-ext").textContent = ext;
+  $("file-name").textContent = file.name;
+  $("file-size").textContent = (file.size / 1024).toFixed(0) + " KB";
+  $("file-row").classList.add("show");
+  $("steps").classList.remove("show");
+}
+$("file").addEventListener("change", (e) => chooseFile(e.target.files[0]));
+["dragenter", "dragover"].forEach(ev => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add("drag"); }));
+["dragleave", "drop"].forEach(ev => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove("drag"); }));
+drop.addEventListener("drop", (e) => chooseFile(e.dataTransfer.files[0]));
+
+// ---------- Uploading: POST /api/invoices ----------
+// The server does all four steps in one request, so the step bar moves on a timer
+// while we wait, and jumps to "done" when the real response arrives.
+function setStep(n) {
+  [...$("steps").children].forEach((li, i) => li.className = i < n ? "done" : i === n ? "active" : "");
+}
+$("extract-btn").addEventListener("click", async () => {
+  if (!selectedFile) return;
+  const btn = $("extract-btn");
+  btn.disabled = true;
+  $("steps").classList.add("show");
+  let step = 0; setStep(0);
+  const timer = setInterval(() => { if (step < 3) setStep(++step); }, 1400);
+
   const body = new FormData();
-  body.append("file", document.getElementById("file").files[0]);
-  btn.disabled = true; msg.textContent = "Reading the invoice…"; result.innerHTML = "";
+  body.append("file", selectedFile);
   try {
     const res = await fetch("/api/invoices", { method: "POST", body });
     const json = await res.json();
-    if (!res.ok) throw new Error(json.detail || "Upload failed");
-    msg.textContent = "Done.";
-    showResult(json);
-    loadTable();
+    if (!res.ok) throw new Error(json.detail || "Upload failed.");
+    setStep(4);
+    toast(json.status === "valid" ? "Invoice extracted and valid." : "Invoice extracted, but it needs review.");
+    await loadInvoices();
+    openDrawer(json.id);
+    selectedFile = null; $("file").value = "";
+    setTimeout(() => { $("file-row").classList.remove("show"); $("steps").classList.remove("show"); }, 1200);
   } catch (error) {
-    msg.textContent = error.message;
+    $("steps").classList.remove("show");
+    toast(error.message, true);
   } finally {
+    clearInterval(timer);
     btn.disabled = false;
   }
 });
 
-loadTable();
+// ---------- Loading and showing the list: GET /api/invoices ----------
+async function loadInvoices() {
+  try {
+    const res = await fetch("/api/invoices");
+    invoices = await res.json();
+  } catch {
+    invoices = [];
+    toast("Could not reach the server.", true);
+  }
+  renderStats();
+  renderTable();
+}
+
+function renderStats() {
+  const total = invoices.length;
+  const valid = invoices.filter(i => i.status === "valid").length;
+  const ai = invoices.filter(i => i.method === "llm").length;
+  const pct = (n) => total ? Math.round(n / total * 100) : 0;
+  $("s-total").textContent = total;
+  $("s-valid").textContent = valid;
+  $("s-review").textContent = total - valid;
+  $("s-ai").textContent = pct(ai) + "%";
+  $("b-valid").style.width = pct(valid) + "%";
+  $("b-review").style.width = pct(total - valid) + "%";
+  $("b-ai").style.width = pct(ai) + "%";
+}
+
+function renderTable() {
+  const q = $("search").value.trim().toLowerCase();
+  const shown = invoices.filter(inv =>
+    (filter === "all" || inv.status === filter) &&
+    (!q || `${inv.data.vendor_name} ${inv.data.invoice_number} ${inv.filename}`.toLowerCase().includes(q)));
+
+  $("empty").hidden = shown.length > 0;
+  $("empty").innerHTML = invoices.length
+    ? "<strong>No matches</strong>Try a different search or filter."
+    : "<strong>No invoices yet</strong>Upload one above to see the extracted data here.";
+
+  $("rows").innerHTML = shown.map(inv => `
+    <tr data-id="${inv.id}" tabindex="0" class="${inv.id === openId ? "selected" : ""}">
+      <td><div class="vendor">${esc(inv.data.vendor_name)}</div><div class="sub">${esc(inv.filename)}</div></td>
+      <td class="num hide-sm">${esc(inv.data.invoice_number)}</td>
+      <td class="hide-sm">${esc(niceDate(inv.data.invoice_date))}</td>
+      <td class="right num">${esc(money(inv.data.total_amount, inv.data.currency))}</td>
+      <td><span class="pill ${inv.status}">${statusLabel(inv.status)}</span></td>
+      <td class="hide-sm"><span class="tag ${inv.method}">${inv.method === "llm" ? "Gemini" : "Rules"}</span></td>
+    </tr>`).join("");
+}
+
+// Filter tabs and search box
+document.querySelectorAll(".tabs button").forEach(b => b.addEventListener("click", () => {
+  filter = b.dataset.filter;
+  document.querySelectorAll(".tabs button").forEach(x => x.setAttribute("aria-pressed", x === b));
+  renderTable();
+}));
+$("search").addEventListener("input", renderTable);
+
+// Clicking (or pressing Enter on) a row opens the detail drawer
+$("rows").addEventListener("click", (e) => { const tr = e.target.closest("tr"); if (tr) openDrawer(+tr.dataset.id); });
+$("rows").addEventListener("keydown", (e) => { if (e.key === "Enter") { const tr = e.target.closest("tr"); if (tr) openDrawer(+tr.dataset.id); } });
+
+// ---------- Detail drawer ----------
+function openDrawer(id) {
+  const inv = invoices.find(i => i.id === id);
+  if (!inv) return;
+  openId = id;
+  const d = inv.data;
+  $("d-file").textContent = inv.filename + " · uploaded " + new Date(inv.created_at + (inv.created_at.endsWith("Z") ? "" : "Z")).toLocaleString();
+  $("d-title").textContent = d.vendor_name || "Unknown vendor";
+  $("d-badges").innerHTML = `<span class="pill ${inv.status}">${statusLabel(inv.status)}</span>
+    <span class="tag ${inv.method}">${inv.method === "llm" ? "Read by Gemini" : "Read by regex rules"}</span>`;
+
+  const checks = inv.issues.length
+    ? `<ul class="issues">${inv.issues.map(i => `<li><span aria-hidden="true">⚠</span>${esc(i)}</li>`).join("")}</ul>`
+    : `<div class="all-good"><span aria-hidden="true">✓</span>All validation rules passed.</div>`;
+
+  const items = d.line_items.length
+    ? `<div class="items"><table>
+        <thead><tr><th>Description</th><th class="right">Qty</th><th class="right">Price</th><th class="right">Amount</th></tr></thead>
+        <tbody>${d.line_items.map(li => `<tr><td style="white-space:normal">${esc(li.description)}</td>
+          <td class="right num">${esc(li.quantity)}</td><td class="right num">${esc(money(li.unit_price))}</td>
+          <td class="right num">${esc(money(li.amount))}</td></tr>`).join("")}</tbody></table></div>`
+    : `<p class="sub">No line items were extracted.${inv.method === "rules" ? " The regex fallback only reads the main fields; Gemini reads line items." : ""}</p>`;
+
+  $("d-body").innerHTML = `
+    <dl class="fields">
+      <div class="field total"><dt>Total</dt><dd class="num">${esc(money(d.total_amount, d.currency))}</dd></div>
+      <div class="field"><dt>Invoice number</dt><dd class="num">${esc(d.invoice_number)}</dd></div>
+      <div class="field"><dt>Invoice date</dt><dd>${esc(niceDate(d.invoice_date))}</dd></div>
+      <div class="field"><dt>Vendor</dt><dd>${esc(d.vendor_name)}</dd></div>
+      <div class="field"><dt>Currency</dt><dd>${esc(d.currency)}</dd></div>
+    </dl>
+    <div class="section-title">Validation checks</div>${checks}
+    <div class="section-title">Line items</div>${items}`;
+
+  $("drawer").classList.add("open"); $("drawer").setAttribute("aria-hidden", "false");
+  $("backdrop").classList.add("open");
+  renderTable();
+  $("close-btn").focus();
+}
+function closeDrawer() {
+  openId = null;
+  $("drawer").classList.remove("open"); $("drawer").setAttribute("aria-hidden", "true");
+  $("backdrop").classList.remove("open");
+  renderTable();
+}
+["close-btn", "close-btn-2", "backdrop"].forEach(id => $(id).addEventListener("click", closeDrawer));
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeDrawer(); });
+
+// Delete: DELETE /api/invoices/{id}
+// The first click asks for confirmation; a second click within 3 seconds deletes.
+$("delete-btn").addEventListener("click", async () => {
+  if (openId == null) return;
+  const btn = $("delete-btn");
+  if (!btn.dataset.confirm) {
+    btn.dataset.confirm = "1"; btn.textContent = "Click again to delete";
+    setTimeout(() => { delete btn.dataset.confirm; btn.textContent = "Delete"; }, 3000);
+    return;
+  }
+  delete btn.dataset.confirm; btn.textContent = "Delete";
+  const res = await fetch(`/api/invoices/${openId}`, { method: "DELETE" });
+  if (res.ok) { toast("Invoice deleted."); closeDrawer(); loadInvoices(); }
+  else toast("Could not delete the invoice.", true);
+});
+
+loadInvoices();
 </script>
 </body>
 </html>
