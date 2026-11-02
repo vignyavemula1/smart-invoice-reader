@@ -1,5 +1,5 @@
 # Container used to deploy the app online (e.g. on Render).
-FROM python:3.12-slim
+FROM python:3.13-slim
 
 # Tesseract OCR engine (Linux install of the same tool you installed on Windows)
 RUN apt-get update && apt-get install -y --no-install-recommends tesseract-ocr \
